@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import os
 from tensordict import TensorDict
 
-# Set up arguments for both environments
 args = {
     'random_seed': 16,
     'test_size': 5,
@@ -86,8 +85,8 @@ for step in range(num_steps):
     }, batch_size=[args['batch_size']])
 
     rl4co_tensordict_out = rl4co_env.step(tensordict_in)
-    rl4co_dynamic = rl4co_tensordict_out["dynamic"]
-    rl4co_avail_actions = rl4co_tensordict_out["avail_actions"]
+    rl4co_dynamic = rl4co_tensordict_out["next"]["dynamic"]
+    rl4co_avail_actions = rl4co_tensordict_out["next"]["avail_actions"]
 
     # Append paths
     for i in range(args['batch_size']):
