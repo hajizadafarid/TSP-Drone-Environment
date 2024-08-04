@@ -1,6 +1,6 @@
 import numpy as np
 from original_env import OriginalEnv, create_test_dataset  # Ensure you have the correct imports
-from rl4co_env_3 import TSPDroneEnv, TSPDroneGenerator
+from rl4co_env import TSPDroneEnv, TSPDroneGenerator
 import torch
 import matplotlib.pyplot as plt
 import os
