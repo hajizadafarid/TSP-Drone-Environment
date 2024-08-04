@@ -1,6 +1,6 @@
 import numpy as np
-from original_env import OriginalEnv, create_test_dataset
-from rl4co_env import TSPDroneEnv, TSPDroneGenerator
+from original_env import OriginalEnv, create_test_dataset  # Ensure you have the correct imports
+from rl4co_env_3 import TSPDroneEnv, TSPDroneGenerator
 import torch
 import matplotlib.pyplot as plt
 import os
@@ -28,7 +28,7 @@ rl4co_env = TSPDroneEnv(generator_params={'num_loc': args['n_nodes'] - 1, 'min_l
 
 # Reset both environments
 original_dynamic, original_avail_actions = original_env.reset()
-rl4co_tensordict = rl4co_env.reset()
+rl4co_tensordict = rl4co_env._reset()
 rl4co_dynamic = rl4co_tensordict["dynamic"]
 rl4co_avail_actions = rl4co_tensordict["avail_actions"]
 
@@ -40,7 +40,7 @@ def plot_initial_locations(data, title):
         plt.title(f"{title} - Batch__ {i}")
         plt.legend()
         plt.savefig(os.path.join(args['data_dir'], f"{title}_Batch__{i}.png"))
-        plt.show()
+        # plt.show()
 
 # Plot initial locations for both environments
 plot_initial_locations(test_data[:, :, :2], "Original Environment Initial Locations")
@@ -62,7 +62,20 @@ for step in range(num_steps):
     time_vec_truck = np.zeros((args['batch_size'], 2))
     time_vec_drone = np.zeros((args['batch_size'], 2))
     terminated = np.zeros(args['batch_size'], dtype=bool)
-    
+
+    # tensordict_in_1 = TensorDict({
+    #     "idx_truck": idx_truck,
+    #     "idx_drone": idx_drone,
+    #     "time_vec_truck": time_vec_truck,
+    #     "time_vec_drone": time_vec_drone,
+    #     "terminated": terminated
+    # }, batch_size=[args['batch_size']])
+    # print('idx_truck', idx_truck )
+    # print('idx_drone', idx_drone )
+    # print('time_vec_truck', time_vec_truck )
+    # print('time_vec_drone', time_vec_drone )
+    # print('terminated', terminated )
+
     time_vec_truck_orig = time_vec_truck.copy()
     time_vec_drone_orig = time_vec_drone.copy()
 
@@ -84,20 +97,44 @@ for step in range(num_steps):
         "terminated": terminated
     }, batch_size=[args['batch_size']])
 
+    tensordict_in.update(rl4co_tensordict)  # Merge current state
+
+    # print("tensordict_in[idx_truck] ", tensordict_in["idx_truck"])
+    # print("tensordict_in[idx_drone]",tensordict_in["idx_drone"])
+    # print("tensordict_in[time_vec_truck]",tensordict_in["time_vec_truck"])
+    # print("tensordict_in[time_vec_drone]",tensordict_in["time_vec_drone"])
+    # print("tensordict_in[terminated]",tensordict_in["terminated"])
+
+
     rl4co_tensordict_out = rl4co_env.step(tensordict_in)
+    rl4co_tensordict.update(rl4co_tensordict_out)  # Update with new state
+    # print("tensordict_in[idx_truck] ", rl4co_tensordict_out["idx_truck"])
+    # print("tensordict_in[idx_drone]",rl4co_tensordict_out["idx_drone"])
+    # print("tensordict_in[time_vec_truck]",rl4co_tensordict_out["time_vec_truck"])
+    # print("tensordict_in[time_vec_drone]",rl4co_tensordict_out["time_vec_drone"])
+    # print("tensordict_in[terminated]",rl4co_tensordict_out["terminated"])
+
+    # print(rl4co_tensordict_out)
     rl4co_dynamic = rl4co_tensordict_out["next"]["dynamic"]
     rl4co_avail_actions = rl4co_tensordict_out["next"]["avail_actions"]
+    truck_loc = rl4co_tensordict["truck_loc"]
+    drone_loc = rl4co_tensordict["drone_loc"]
+
+    # Debug print statements
+    print(f"Step {step + 1}:")
+    # print(f" Dynamic differnce: {torch.from_numpy(original_dynamic)-rl4co_dynamic}")
+    # print(f"RL4CO Dynamic: {rl4co_dynamic}")
 
     # Append paths
     for i in range(args['batch_size']):
         truck_paths_orig[i].append(test_data[i, original_env.truck_loc[i], :2])
         drone_paths_orig[i].append(test_data[i, original_env.drone_loc[i], :2])
-        truck_paths_rl4co[i].append(test_data_tensor[i, rl4co_env.truck_loc[i], :2].numpy())
-        drone_paths_rl4co[i].append(test_data_tensor[i, rl4co_env.drone_loc[i], :2].numpy())
+        truck_paths_rl4co[i].append(test_data_tensor[i, truck_loc[i], :2].numpy())
+        drone_paths_rl4co[i].append(test_data_tensor[i, drone_loc[i], :2].numpy())
     
-    print(f"Step {step + 1}:")
     assert np.allclose(original_dynamic, rl4co_dynamic.numpy(), atol=1e-5), f"Dynamic states do not match at step {step}!"
     assert np.allclose(original_avail_actions, rl4co_avail_actions.numpy(), atol=1e-5), f"Available actions do not match at step {step}!"
+
 
 # Convert paths to numpy arrays
 truck_paths_orig = [np.array(path) for path in truck_paths_orig]
@@ -117,14 +154,14 @@ def plot_paths(paths, data, title):
         plt.title(f"{title} - Batch__ {i}")
         plt.legend()
         plt.savefig(os.path.join(args['data_dir'], f"{title}_Batch__{i}.png"))
-        plt.show()
+        # plt.show()
 
 plot_paths(list(zip(truck_paths_orig, drone_paths_orig)), test_data[:, :, :2], "Original Environment Paths")
 plot_paths(list(zip(truck_paths_rl4co, drone_paths_rl4co)), test_data_tensor.numpy(), "RL4CO Environment Paths")
 
 # Compare final rewards
 original_reward = original_env.calculate_cost()
-rl4co_reward = rl4co_env._calculate_cost()
+rl4co_reward = rl4co_env.get_reward(rl4co_tensordict, None)
 
 assert np.isclose(original_reward, rl4co_reward.item(), atol=1e-5), "Final rewards do not match!"
 
